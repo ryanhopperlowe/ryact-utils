@@ -1,0 +1,22 @@
+{
+	"name": "@ryact-utils/monorepo",
+	"version": "0.0.0",
+	"description": "utils for react",
+	"workspaces": [
+		"packages/**",
+		"apps/**"
+	],
+	"scripts": {},
+	"keywords": [
+		"react",
+		"utils"
+	],
+	"author": "Ryan Hopper-Lowe",
+	"license": "ISC",
+	"devDependencies": {
+		"prettier": "^3.4.2"
+	},
+	"dependencies": {
+		"packages": "link:/Users/rhopperlowe/workspace/ryact-utils/packages"
+	}
+}
