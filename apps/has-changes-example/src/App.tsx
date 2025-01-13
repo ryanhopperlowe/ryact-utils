@@ -8,7 +8,7 @@ function App() {
 
 	const [eventsFired, setEventsFired] = useState(0);
 
-	const [hasChanged, prev] = useHasChanged([]);
+	const [hasChanged, prev] = useHasChanged({ count });
 	if (hasChanged) {
 		setEventsFired((prev) => prev + 1);
 		console.log('previous: ' + prev);
@@ -21,6 +21,7 @@ function App() {
 	return (
 		<>
 			<h2>Events fired: {eventsFired}</h2>
+
 			<div className="card">
 				<button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
 			</div>

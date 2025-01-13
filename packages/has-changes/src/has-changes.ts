@@ -1,28 +1,38 @@
 import { useState } from 'react';
 
-export type Comparison<T> = 'shallowish' | ((a: T, b: T) => boolean);
+export type Comparison<T> = 'shallowish' | 'shallow' | ((a: T, b: T) => boolean);
 
-export type HasChangeConfig<T> = {
+export type HasChangeConfig<T, TRunOnMount extends boolean = false> = {
 	comparison?: Comparison<T>;
-	runOnMount?: boolean;
+	runOnMount?: TRunOnMount;
 };
 
-export function useHasChanged<T>(current: T, config: HasChangeConfig<T> = {}) {
-	const { comparison = Object.is, runOnMount = false } = config;
+export type PrevState<T, TRunOnMount extends boolean> = TRunOnMount extends true ? [T] | null : [T];
+export type HasChangeResult<T, TRunOnMount extends boolean> = [boolean, PrevState<T, TRunOnMount>];
+
+export function useHasChanged<T, TRunOnMount extends boolean = false>(
+	current: T,
+	config: HasChangeConfig<T, TRunOnMount> = {},
+): HasChangeResult<T, TRunOnMount> {
+	const { comparison = 'shallowish', runOnMount = false } = config;
 	const compare = getCompareFn(comparison);
 
-	const [previous, setPrevious] = useState<[T] | null>(runOnMount ? null : [current]);
+	const [previous, setPrevious] = useState(
+		(runOnMount ? null : [current]) as PrevState<T, typeof runOnMount>,
+	);
 
 	const hasChanged = !previous || !compare(current, previous[0]);
 	if (hasChanged) setPrevious([current]);
 
-	return [hasChanged, previous?.[0]] as const;
+	return [hasChanged, previous?.[0]] as HasChangeResult<T, TRunOnMount>;
 }
 
 function getCompareFn<T>(comparison: Comparison<T>): (a: T, b: T) => boolean {
 	if (typeof comparison === 'function') return comparison;
 
 	if (comparison === 'shallowish') return shallowishCompare;
+
+	if (comparison === 'shallow') return Object.is;
 
 	return Object.is;
 }

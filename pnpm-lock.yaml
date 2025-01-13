@@ -20,6 +20,9 @@ importers:
 
   apps/has-changes-example:
     dependencies:
+      '@ryact-utils/has-changes':
+        specifier: ^0.0.0
+        version: link:../../packages/has-changes
       react:
         specifier: ^18.3.1
         version: 18.3.1
