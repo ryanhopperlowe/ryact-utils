@@ -1,6 +1,6 @@
 {
 	"name": "@ryact-utils/has-changes",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"type": "module",
 	"private": false,
 	"files": [
@@ -47,5 +47,11 @@
 		"access": "public",
 		"registry": "https://registry.npmjs.org",
 		"tag": "latest"
-	}
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ryanhopperlowe/ryact-utils.git",
+		"directory": "packages/has-changes"
+	},
+	"homepage": "https://github.com/ryanhopperlowe/ryact-utils/tree/main/packages/has-changes#readme"
 }
