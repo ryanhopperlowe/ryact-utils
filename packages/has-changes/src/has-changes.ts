@@ -8,7 +8,10 @@ export type HasChangeConfig<T, TRunOnMount extends boolean = false> = {
 };
 
 export type PrevState<T, TRunOnMount extends boolean> = TRunOnMount extends true ? [T] | null : [T];
-export type HasChangeResult<T, TRunOnMount extends boolean> = [boolean, PrevState<T, TRunOnMount>];
+export type HasChangeResult<T, TRunOnMount extends boolean> = [
+	boolean,
+	TRunOnMount extends true ? T | null : T,
+];
 
 export function useHasChanged<T, TRunOnMount extends boolean = false>(
 	current: T,
