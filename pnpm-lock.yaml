@@ -12,7 +12,7 @@ importers:
 
         specifier: link:/Users/rhopperlowe/workspace/ryact-utils/packages
 
-        version: link:packages
+        version: link:../../../rhopperlowe/workspace/ryact-utils/packages
     devDependencies:
       prettier:
         specifier: ^3.4.2
@@ -21,8 +21,8 @@ importers:
   apps/has-changes-example:
     dependencies:
       '@ryact-utils/has-changes':
-        specifier: ^0.0.0
-        version: link:../../packages/has-changes
+        specifier: ^0.0.5
+        version: 0.0.5(@types/node@22.10.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3)(vite@6.0.7(@types/node@22.10.5))
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -64,13 +64,62 @@ importers:
         specifier: ^6.0.5
         version: 6.0.7(@types/node@22.10.5)
 
+  packages/async:
+    dependencies:
+      react:
+        specifier: '>=18.0.0'
+        version: 18.3.1
+      react-dom:
+        specifier: '>=18.0.0'
+        version: 18.3.1(react@18.3.1)
+      vite-plugin-dts:
+        specifier: ^4.5.0
+        version: 4.5.0(@types/node@22.10.5)(rollup@4.30.1)(typescript@5.6.3)(vite@6.0.7(@types/node@22.10.5))
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.17.0
+        version: 9.17.0
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.10.5
+      '@types/react':
+        specifier: ^18.3.18
+        version: 18.3.18
+      '@types/react-dom':
+        specifier: ^18.3.5
+        version: 18.3.5(@types/react@18.3.18)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.4
+        version: 4.3.4(vite@6.0.7(@types/node@22.10.5))
+      eslint:
+        specifier: ^9.17.0
+        version: 9.17.0
+      eslint-plugin-react-hooks:
+        specifier: ^5.0.0
+        version: 5.1.0(eslint@9.17.0)
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.16
+        version: 0.4.16(eslint@9.17.0)
+      globals:
+        specifier: ^15.14.0
+        version: 15.14.0
+      typescript:
+        specifier: ~5.6.2
+        version: 5.6.3
+      typescript-eslint:
+        specifier: ^8.18.2
+        version: 8.19.1(eslint@9.17.0)(typescript@5.6.3)
+      vite:
+        specifier: ^6.0.5
+        version: 6.0.7(@types/node@22.10.5)
+
   packages/has-changes:
     dependencies:
       react:
-        specifier: ^18.0.0
+        specifier: '>=18.0.0'
         version: 18.3.1
       react-dom:
-        specifier: ^18.0.0
+        specifier: '>=18.0.0'
         version: 18.3.1(react@18.3.1)
       vite-plugin-dts:
         specifier: ^4.5.0
@@ -570,6 +619,12 @@ packages:
 
   '@rushstack/ts-command-line@4.23.3':
     resolution: {integrity: sha512-HazKL8fv4HMQMzrKJCrOrhyBPPdzk7iajUXgsASwjQ8ROo1cmgyqxt/k9+SdmrNLGE1zATgRqMUH3s/6smbRMA==}
+
+  '@ryact-utils/has-changes@0.0.5':
+    resolution: {integrity: sha512-VDDx4YW4Rxwgjq4eWhxTFULAHx2vx8zalxtgtlh28OXsaiK74GMcgAolz1HAeTPJTY8pYDI6HBkEvI8hbv9/vA==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
 
   '@types/argparse@1.0.38':
     resolution: {integrity: sha512-ebDJ9b0e702Yr7pWgB0jzm+CX4Srzz8RcXtLJDJB+BSccqMa36uyH/zUsSYao5+BD1ytv3k3rPYCq4mAE1hsXA==}
@@ -1807,6 +1862,18 @@ snapshots:
       string-argv: 0.3.2
     transitivePeerDependencies:
       - '@types/node'
+
+  '@ryact-utils/has-changes@0.0.5(@types/node@22.10.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3)(vite@6.0.7(@types/node@22.10.5))':
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      vite-plugin-dts: 4.5.0(@types/node@22.10.5)(rollup@4.30.1)(typescript@5.6.3)(vite@6.0.7(@types/node@22.10.5))
+    transitivePeerDependencies:
+      - '@types/node'
+      - rollup
+      - supports-color
+      - typescript
+      - vite
 
   '@types/argparse@1.0.38': {}
 
