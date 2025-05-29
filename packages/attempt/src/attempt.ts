@@ -80,5 +80,3 @@ export const createAttempt = <TError = unknown>(
 };
 
 export const attempt = createAttempt(DEFAULT_COERCE_ERROR);
-
-export default attempt;
