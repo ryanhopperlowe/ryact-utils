@@ -45,7 +45,9 @@ export interface Attempt<TError> extends AttemptSync<TError> {
 	async: AttemptAsync<TError>;
 }
 
-const createAttempt = <TError = unknown>(coerceError: ConvertError<TError>): Attempt<TError> => {
+export const createAttempt = <TError = unknown>(
+	coerceError: ConvertError<TError>,
+): Attempt<TError> => {
 	const attemptSync = <TArgs extends unknown[], TReturn>(
 		fn: (...args: TArgs) => TReturn,
 		...args: TArgs
@@ -77,6 +79,6 @@ const createAttempt = <TError = unknown>(coerceError: ConvertError<TError>): Att
 	return attempt;
 };
 
-const attempt = createAttempt(DEFAULT_COERCE_ERROR);
+export const attempt = createAttempt(DEFAULT_COERCE_ERROR);
 
-export { attempt as default, attempt, createAttempt };
+export default attempt;
