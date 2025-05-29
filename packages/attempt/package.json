@@ -1,19 +1,19 @@
 {
 	"name": "@ryact-utils/attempt",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"type": "module",
 	"private": false,
 	"files": [
 		"dist"
 	],
-	"main": "./dist/has-changes.umd.cjs",
-	"module": "./dist/has-changes.js",
-	"types": "./dist/has-changes.d.ts",
+	"main": "./dist/attempt.umd.cjs",
+	"module": "./dist/attempt.js",
+	"types": "./dist/attempt.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/has-changes.d.ts",
-			"import": "./dist/has-changes.js",
-			"require": "./dist/has-changes.umd.cjs"
+			"types": "./dist/attempt.d.ts",
+			"import": "./dist/attempt.js",
+			"require": "./dist/attempt.umd.cjs"
 		}
 	},
 	"scripts": {
@@ -42,5 +42,5 @@
 		"url": "https://github.com/ryanhopperlowe/ryact-utils.git",
 		"directory": "packages/attempt"
 	},
-	"homepage": "https://github.com/ryanhopperlowe/ryact-utils/tree/main/packages/has-changes#readme"
+	"homepage": "https://github.com/ryanhopperlowe/ryact-utils/tree/main/packages/attempt#readme"
 }
