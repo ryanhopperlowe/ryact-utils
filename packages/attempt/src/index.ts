@@ -11,7 +11,7 @@ export type AttemptFailure<TError> = [TError, null] & { data: null; error: TErro
 export type AttemptResult<TReturn, TError> = AttemptSuccess<TReturn> | AttemptFailure<TError>;
 
 const createResult = <TReturn, TError>(...[error, data]: AttemptResultTuple<TReturn, TError>) => {
-	const res = [data, error] as AttemptResult<TReturn, TError>;
+	const res = [error, data] as AttemptResult<TReturn, TError>;
 	res.data = data;
 	res.error = error;
 
