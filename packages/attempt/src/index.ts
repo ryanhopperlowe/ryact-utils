@@ -1,19 +1,30 @@
-const DEFAULT_COERCE_ERROR = (x: unknown, message = 'Something went wrong') => {
+const DEFAULT_COERCE_ERROR = (x: unknown, message = 'Unknown error caught with "attempt"') => {
 	if (x instanceof Error) return x;
 	if (typeof x === 'string') return new Error(x);
 	return new Error(message, { cause: x });
 };
 
-type AttemptResultTuple<TReturn, TError> = [null, TReturn] | [TError, null];
+type AttemptResultTuple<TReturn, TError> = [undefined, TReturn, true] | [TError, undefined, false];
 
-export type AttemptSuccess<TReturn> = [null, TReturn] & { data: TReturn; error: null };
-export type AttemptFailure<TError> = [TError, null] & { data: null; error: TError };
+export type AttemptSuccess<TReturn> = [undefined, TReturn, true] & {
+	data: TReturn;
+	error: undefined;
+	success: true;
+};
+export type AttemptFailure<TError> = [TError, undefined, false] & {
+	data: undefined;
+	error: TError;
+	success: false;
+};
 export type AttemptResult<TReturn, TError> = AttemptSuccess<TReturn> | AttemptFailure<TError>;
 
-const createResult = <TReturn, TError>(...[error, data]: AttemptResultTuple<TReturn, TError>) => {
-	const res = [error, data] as AttemptResult<TReturn, TError>;
+const createResult = <TReturn, TError>(
+	...[error, data, success]: AttemptResultTuple<TReturn, TError>
+) => {
+	const res = [error, data, success] as AttemptResult<TReturn, TError>;
 	res.data = data;
 	res.error = error;
+	res.success = success;
 
 	return res;
 };
@@ -53,28 +64,30 @@ export const createAttempt = <TError = unknown>(
 		...args: TArgs
 	): AttemptResult<TReturn, TError> => {
 		try {
-			return createResult<TReturn, TError>(null, fn(...args));
+			return createResult<TReturn, TError>(undefined, fn(...args), true);
 		} catch (e) {
-			return createResult<TReturn, TError>(coerceError(e), null);
+			return createResult<TReturn, TError>(coerceError(e), undefined, false);
 		}
 	};
 
-	const attempt = attemptSync as Attempt<TError>;
-
-	attempt.promise = async <TReturn>(
+	const attemptPromise = async <TReturn>(
 		promise: Promise<TReturn>,
 	): Promise<AttemptResult<TReturn, TError>> => {
 		try {
-			return createResult<TReturn, TError>(null, await promise);
+			return createResult<TReturn, TError>(undefined, await promise, true);
 		} catch (e) {
-			return createResult<TReturn, TError>(coerceError(e), null);
+			return createResult<TReturn, TError>(coerceError(e), undefined, false);
 		}
 	};
 
-	attempt.async = <TArgs extends unknown[], TReturn>(
+	const attemptAsync = <TArgs extends unknown[], TReturn>(
 		fn: (...args: TArgs) => Promise<TReturn>,
 		...args: TArgs
-	) => attempt.promise(fn(...args));
+	) => attemptPromise(fn(...args));
+
+	const attempt = attemptSync as Attempt<TError>;
+	attempt.promise = attemptPromise;
+	attempt.async = attemptAsync;
 
 	return attempt;
 };
