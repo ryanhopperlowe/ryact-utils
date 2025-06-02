@@ -18,7 +18,7 @@ export type AttemptFailure<TError> = [TError, undefined, false] & {
 };
 export type AttemptResult<TReturn, TError> = AttemptSuccess<TReturn> | AttemptFailure<TError>;
 
-const createResult = <TReturn, TError>(
+export const createResult = <TReturn, TError>(
 	...[error, data, success]: AttemptResultTuple<TReturn, TError>
 ) => {
 	const res = [error, data, success] as AttemptResult<TReturn, TError>;
@@ -51,14 +51,40 @@ export interface AttemptAsync<TError> {
 	): Promise<AttemptResult<TReturn, TError>>;
 }
 
+type AttemptFnReturn<TReturn, TError> =
+	TReturn extends Promise<infer TAwaited>
+		? Promise<AttemptResult<TAwaited, TError>>
+		: AttemptResult<TReturn, TError>;
+
+interface AttemptFn<TError> {
+	<TReturn, TArgs extends unknown[]>(
+		fn: (...args: TArgs) => TReturn,
+		...args: TArgs
+	): AttemptFnReturn<TReturn, TError>;
+}
+
 export interface Attempt<TError> extends AttemptSync<TError> {
 	promise: AttemptPromise<TError>;
 	async: AttemptAsync<TError>;
+	sync: AttemptSync<TError>;
+	fn: AttemptFn<TError>;
 }
 
 export const createAttempt = <TError = unknown>(
 	coerceError: ConvertError<TError>,
 ): Attempt<TError> => {
+	const attemptFn = <TReturn, TArgs extends unknown[]>(
+		fn: (...args: TArgs) => TReturn,
+		...args: TArgs
+	): AttemptFnReturn<TReturn, TError> => {
+		const result = attemptSync(fn, ...args);
+
+		if (!result.success || !(result.data instanceof Promise))
+			return result as AttemptFnReturn<TReturn, TError>;
+
+		return attemptPromise(result.data) as AttemptFnReturn<TReturn, TError>;
+	};
+
 	const attemptSync = <TArgs extends unknown[], TReturn>(
 		fn: (...args: TArgs) => TReturn,
 		...args: TArgs
@@ -88,6 +114,8 @@ export const createAttempt = <TError = unknown>(
 	const attempt = attemptSync as Attempt<TError>;
 	attempt.promise = attemptPromise;
 	attempt.async = attemptAsync;
+	attempt.sync = attemptSync;
+	attempt.fn = attemptFn;
 
 	return attempt;
 };
