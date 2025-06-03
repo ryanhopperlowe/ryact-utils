@@ -21,7 +21,8 @@
 		"build": "tsc -b && vite build",
 		"lint": "tsc --noEmit && eslint .",
 		"preview": "vite preview",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.17.0",

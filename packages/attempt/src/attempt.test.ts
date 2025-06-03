@@ -117,4 +117,68 @@ describe(attempt, () => {
 			expect(result).toEqual(createResult(new Error('test'), undefined, false));
 		});
 	});
+
+	describe(attempt.any, () => {
+		describe('when param is a function', () => {
+			test('should return a promise if fn is async', () => {
+				const result = attempt.fn(async () => 5);
+				expect(result).toBeInstanceOf(Promise);
+			});
+
+			test('should forward parameters', () => {
+				const fn = vitest.fn();
+				attempt.fn(fn, 1, 2, 3);
+			});
+
+			test('should return success result if fn returns a promise that resolves', async () => {
+				const result = attempt.fn(async () => 5);
+				expect(await result).toEqual(createResult(undefined, 5, true));
+			});
+
+			test('should return failure result if fn returns a promise that rejects', async () => {
+				const result = attempt.fn(async () => Promise.reject(new Error('test')));
+				expect(await result).toEqual(createResult(new Error('test'), undefined, false));
+			});
+
+			test('should succeed synchronously if fn is sync', () => {
+				const result = attempt.fn(() => 5);
+				expect(result).toEqual(createResult(undefined, 5, true));
+			});
+
+			test('should return failure result if fn is sync and throws', () => {
+				const result = attempt.fn(() => {
+					throw new Error('test');
+				});
+
+				expect(result).toEqual(createResult(new Error('test'), undefined, false));
+			});
+		});
+
+		describe('when param is a promise', () => {
+			test('should return a promise', () => {
+				const result = attempt.promise(Promise.resolve(5));
+				expect(result).toBeInstanceOf(Promise);
+			});
+
+			test('should return success result if promise resolves', async () => {
+				const result = attempt.promise(Promise.resolve(5));
+				expect(await result).toEqual(createResult(undefined, 5, true));
+			});
+
+			test('should return failure result if promise rejects', async () => {
+				const result = attempt.promise(Promise.reject(new Error('test')));
+				expect(await result).toEqual(createResult(new Error('test'), undefined, false));
+			});
+		});
+
+		describe('when param is a primitive value', () => {
+			test.each([{ obj: true }, true, false, 5, 0, 'hi there', '', {}, null])(
+				'should return success for primitive value: %s',
+				(val) => {
+					const result = attempt.any(val);
+					expect(result).toEqual(createResult(undefined, val, true));
+				},
+			);
+		});
+	});
 });
