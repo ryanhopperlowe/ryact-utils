@@ -1,6 +1,6 @@
 {
 	"name": "@ryact-utils/attempt",
-	"version": "0.0.8",
+	"version": "0.1.0",
 	"type": "module",
 	"private": false,
 	"files": [
