@@ -219,13 +219,82 @@ const attemptPlus = createAttempt((x) => ({
 }));
 ```
 
+### 10. `AttemptResult` — Type Signature Breakdown
+
+`AttemptResult<TReturn, TError>` is a **tagged union** that captures *either* a success *or* a failure in a single, tuple-shaped value.
+It comes in two variants:
+
+```ts
+// ✅ SUCCESS
+type AttemptSuccess<TReturn> = [
+  undefined,   // error slot is always undefined
+  TReturn,     // the data you asked for
+  true         // explicit success flag
+] & {
+  error:   undefined;
+  data:    TReturn;
+  success: true;
+};
+
+// ❌ FAILURE
+type AttemptFailure<TError> = [
+  TError,      // the coerced error
+  undefined,   // data is undefined
+  false        // explicit failure flag
+] & {
+  error:   TError;
+  data:    undefined;
+  success: false;
+};
+
+// 📦 Combined
+type AttemptResult<TReturn, TError> =
+  | AttemptSuccess<TReturn>
+  | AttemptFailure<TError>;
+```
+
+### Tuple Indices vs. Named Properties
+
+| Position | Named property | Meaning                                                  |
+| -------- | -------------- | -------------------------------------------------------- |
+| `[0]`    | `.error`       | The error object on failure, or `undefined` on success.  |
+| `[1]`    | `.data`        | The returned data on success, or `undefined` on failure. |
+| `[2]`    | `.ok`     | A boolean you can use to narrow the union in TypeScript in the case where TError or TReturn can be falsy. |
+
+Because each variant hard-codes `true` or `false` in the third slot, TypeScript’s control-flow analyzer automatically narrows types inside an `if (result.success)` block:
+
+```ts
+const result = await attempt.async(fetchUser, "123");
+
+if (result.ok) {
+  // TS knows: result.data is User; result.error is undefined
+  console.log(result.data.name);
+} else {
+  // TS knows: result.error is Error; result.data is undefined
+  console.error(result.error.message);
+}
+```
+
+### Generic Parameters
+
+* `TReturn` — the type of the successful value (inferred from your function or promise).
+* `TError`  — the type of the coerced error (defaults to `unknown`, but becomes whatever you supply via `createAttempt(coerceError)`).
+
 ---
 
-## Patterns & Recipes
+**Why a tuple *and* properties?**
+The tuple form makes destructuring concise:
 
-See the “Code Examples” section earlier in this README for dozens of real‑world snippets—chained operations, Express routes, unit testing, and more.
+```ts
+const [err, value, ok] = await attempt.promise(fetch("/api"));
+```
 
-The goal of `attempt` is to be as flexible as you want it to be. It may be best to establish common patterns within a codebase to prevent different patterns from being used within attempt.
+while the object properties give self-documenting clarity when that fits your style:
+
+```ts
+if (!result.ok) return result.error;
+return doSomething(result.data);
+```
 
 ---
 
