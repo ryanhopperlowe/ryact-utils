@@ -30,19 +30,56 @@ yarn add @ryact-utils/attempt
 
 ---
 
-## Quick Example
+## Quick Example: From nested `try / catch` hell to clean `attempt` flow
+
+### The old way (try/catch hell)
 
 ```ts
-import { attempt } from '@ryact-utils/attempt';
-
-const [err, user] = await attempt(fetchUser, '42');
-
-if (!err) {
-	console.log('Hello', user.name);
-} else {
-	console.error('Could not load user:', err.message);
+async function loadDashboard(userId: string) {
+	try {
+		const user = await fetchUserById(userId);
+		try {
+			const posts = await fetchPostsForUser(user.id);
+			try {
+				const comments = await fetchCommentsForPost(posts[0].id);
+				console.log({ user, posts, comments });
+			} catch (e) {
+				console.error('Comments step failed:', e);
+			}
+		} catch (e) {
+			console.error('Posts step failed:', e);
+		}
+	} catch (e) {
+		console.error('User step failed:', e);
+	}
 }
 ```
+
+### The `attempt` way (flat & readable)
+
+```ts
+// flat-flow.ts
+async function loadDashboard(userId: string) {
+	const [uErr, user] = await attempt(fetchUser(userId));
+	if (uErr) return console.error(uErr);
+
+	const [pErr, posts] = await attempt(fetchPosts(user.id));
+	if (pErr) return console.error(pErr);
+
+	const [cErr, comments] = await attempt(fetchComments(posts[0].id));
+	if (cErr) return console.error(cErr);
+
+	console.log({ user, posts, comments });
+}
+```
+
+With `attempt`, every operation is wrapped in a single line, making the happy path obvious and the error handling explicit—without ever nesting `try / catch` blocks.
+
+#### Improvements:
+
+- ✅ One level of indentation throughout
+- ✅ Linear sequence—handle each error in place, then move on
+- ✅ Success path reads top-to-bottom like a recipe
 
 ---
 
