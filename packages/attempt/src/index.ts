@@ -9,17 +9,17 @@ type Any = any;
 
 type AttemptResultTuple<TReturn, TError> = [undefined, TReturn, true] | [TError, undefined, false];
 
-export type AttemptSuccess<TReturn> = [undefined, TReturn, true] & {
+export type AttemptResultOk<TReturn> = [undefined, TReturn, true] & {
 	data: TReturn;
 	error: undefined;
-	success: true;
+	ok: true;
 };
-export type AttemptFailure<TError> = [TError, undefined, false] & {
+export type AttemptResultFail<TError> = [TError, undefined, false] & {
 	data: undefined;
 	error: TError;
-	success: false;
+	ok: false;
 };
-export type AttemptResult<TReturn, TError> = AttemptSuccess<TReturn> | AttemptFailure<TError>;
+export type AttemptResult<TReturn, TError> = AttemptResultOk<TReturn> | AttemptResultFail<TError>;
 
 export const createResult = <TReturn, TError>(
 	...[error, data, success]: AttemptResultTuple<TReturn, TError>
@@ -27,7 +27,7 @@ export const createResult = <TReturn, TError>(
 	const res = [error, data, success] as AttemptResult<TReturn, TError>;
 	res.data = data;
 	res.error = error;
-	res.success = success;
+	res.ok = success;
 
 	return res;
 };
@@ -100,8 +100,7 @@ export const createAttempt = <TError = unknown>(
 
 		const result = attemptSync(fn, ...args);
 
-		if (result.success && result.data instanceof Promise)
-			return attemptPromise(result.data) as Result;
+		if (result.ok && result.data instanceof Promise) return attemptPromise(result.data) as Result;
 
 		return result as Result;
 	};

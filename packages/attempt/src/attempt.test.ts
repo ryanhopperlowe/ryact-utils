@@ -7,7 +7,7 @@ describe(attempt, () => {
 			const result = createResult(undefined, 5, true);
 
 			expect(result).toEqual(expect.arrayContaining([undefined, 5, true]));
-			expect(result).toEqual(expect.objectContaining({ data: 5, error: undefined, success: true }));
+			expect(result).toEqual(expect.objectContaining({ data: 5, error: undefined, ok: true }));
 		});
 
 		test('should return failure result as an object and a tuple', () => {
@@ -15,7 +15,7 @@ describe(attempt, () => {
 
 			expect(result).toEqual(expect.arrayContaining([new Error('test'), undefined, false]));
 			expect(result).toEqual(
-				expect.objectContaining({ data: undefined, error: new Error('test'), success: false }),
+				expect.objectContaining({ data: undefined, error: new Error('test'), ok: false }),
 			);
 		});
 	});
