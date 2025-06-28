@@ -1,4 +1,7 @@
-const DEFAULT_COERCE_ERROR = (x: unknown, message = 'Unknown error caught with "attempt"') => {
+export const DEFAULT_COERCE_ERROR = (
+	x: unknown,
+	message = 'Unknown error caught with "attempt"',
+) => {
 	if (x instanceof Error) return x;
 	if (typeof x === 'string') return new Error(x);
 	return new Error(message, { cause: x });
@@ -54,44 +57,70 @@ export interface AttemptAsync<TError> {
 	): Promise<AttemptResult<TReturn, TError>>;
 }
 
-type AttemptFnReturn<TReturn, TError> =
+export type AttemptFnReturn<TReturn, TError> =
 	TReturn extends Promise<infer TAwaited>
 		? Promise<AttemptResult<TAwaited, TError>>
 		: AttemptResult<TReturn, TError>;
 
-interface AttemptFn<TError> {
+export interface AttemptFn<TError> {
 	<TReturn, TArgs extends unknown[]>(
 		fn: (...args: TArgs) => TReturn,
 		...args: TArgs
 	): AttemptFnReturn<TReturn, TError>;
 }
 
-type AttemptAnyArgs<TParam> = TParam extends (...args: infer TArgs) => Any ? TArgs : [];
-type AttemptAnyReturn<TParam> = TParam extends (...args: Any[]) => infer TReturn ? TReturn : TParam;
+export type AttemptAnyArgs<TParam> = TParam extends (...args: infer TArgs) => Any ? TArgs : [];
+export type AttemptAnyReturn<TParam> = TParam extends (...args: Any[]) => infer TReturn
+	? TReturn
+	: TParam;
 
-type AttemptAnyResult<TReturn, TError> =
+export type AttemptAnyResult<TReturn, TError> =
 	TReturn extends Promise<infer TAwaited>
 		? Promise<AttemptResult<TAwaited, TError>>
 		: AttemptResult<TReturn, TError>;
 
-interface AttemptAny<TError> {
+export interface AttemptAny<TError> {
 	<TParam, TArgs extends AttemptAnyArgs<TParam>, TReturn extends AttemptAnyReturn<TParam>>(
 		param: TParam,
 		...args: TArgs
 	): AttemptAnyResult<TReturn, TError>;
 }
 
-export interface Attempt<TError> extends AttemptAny<TError> {
-	promise: AttemptPromise<TError>;
-	async: AttemptAsync<TError>;
-	sync: AttemptSync<TError>;
-	fn: AttemptFn<TError>;
-	any: AttemptAny<TError>;
+export interface CreateAttemptFn<TError> {
+	<TReturn, TArgs extends unknown[]>(
+		fn: (...args: TArgs) => TReturn,
+	): (...args: TArgs) => AttemptFnReturn<TReturn, TError>;
 }
 
-export const createAttempt = <TError = unknown>(
-	coerceError: ConvertError<TError>,
-): Attempt<TError> => {
+export interface CreateAttemptFnSync<TError> {
+	<TReturn, TArgs extends unknown[]>(
+		fn: (...args: TArgs) => TReturn,
+	): (...args: TArgs) => AttemptResult<TReturn, TError>;
+}
+
+export interface CreateAttemptFnAsync<TError> {
+	<TReturn, TArgs extends unknown[]>(
+		fn: (...args: TArgs) => Promise<TReturn>,
+	): (...args: TArgs) => Promise<AttemptResult<TReturn, TError>>;
+}
+
+export interface BuildAttempt {
+	<TError>(coerceError: (x: unknown) => TError): Attempt<TError>;
+}
+
+export interface Attempt<TError> extends AttemptAny<TError> {
+	promise: AttemptPromise<TError>;
+	fn: AttemptFn<TError>;
+	sync: AttemptSync<TError>;
+	async: AttemptAsync<TError>;
+	any: AttemptAny<TError>;
+	create: CreateAttemptFn<TError>;
+	createSync: CreateAttemptFnSync<TError>;
+	createAsync: CreateAttemptFnAsync<TError>;
+	builder: BuildAttempt;
+}
+
+const createAttempt = <TError = unknown>(coerceError: ConvertError<TError>): Attempt<TError> => {
 	const attemptFn = <TReturn, TArgs extends unknown[]>(
 		fn: (...args: TArgs) => TReturn,
 		...args: TArgs
@@ -148,12 +177,33 @@ export const createAttempt = <TError = unknown>(
 		return createResult(undefined, param, true) as Result;
 	};
 
+	const createFn =
+		<TReturn, TArgs extends unknown[]>(fn: (...args: TArgs) => TReturn) =>
+		(...args: TArgs) =>
+			attemptFn(fn, ...args);
+
+	const createSync =
+		<TReturn, TArgs extends unknown[]>(fn: (...args: TArgs) => TReturn) =>
+		(...args: TArgs) =>
+			attemptSync(fn, ...args);
+
+	const createAsync =
+		<TReturn, TArgs extends unknown[]>(fn: (...args: TArgs) => Promise<TReturn>) =>
+		(...args: TArgs) =>
+			attemptAsync(fn, ...args);
+
 	const attempt = attemptAny as Attempt<TError>;
 	attempt.promise = attemptPromise;
 	attempt.async = attemptAsync;
 	attempt.sync = attemptSync;
 	attempt.fn = attemptFn;
 	attempt.any = attemptAny as AttemptAny<TError>;
+
+	attempt.create = createFn;
+	attempt.createSync = createSync;
+	attempt.createAsync = createAsync;
+
+	attempt.builder = createAttempt;
 
 	return attempt;
 };

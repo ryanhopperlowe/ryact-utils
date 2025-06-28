@@ -181,4 +181,140 @@ describe(attempt, () => {
 			);
 		});
 	});
+
+	describe(attempt.createSync, () => {
+		test('returns an attempt callback fn', () => {
+			const fn = attempt.createSync(() => 5);
+			expect(fn).toEqual(expect.any(Function));
+		});
+
+		describe('attempt.createSync -> fn', () => {
+			test('should forward parameters', () => {
+				const fn = vitest.fn();
+				attempt.createSync(fn)(1, 2, 3);
+
+				expect(fn).toHaveBeenCalledWith(1, 2, 3);
+			});
+
+			test('should return success result if function does not throw', () => {
+				const fn = attempt.createSync(() => 5);
+
+				expect(fn()).toEqual(createResult(undefined, 5, true));
+			});
+
+			test('should return failure result if function throws', () => {
+				const fn = attempt.createSync(() => {
+					throw new Error('test');
+				});
+
+				expect(fn()).toEqual(createResult(new Error('test'), undefined, false));
+			});
+		});
+	});
+
+	describe(attempt.createAsync, () => {
+		test('should return a callback fn', () => {
+			const fn = attempt.createAsync(async () => 5);
+			expect(fn).toEqual(expect.any(Function));
+		});
+
+		describe('attempt.createAsync -> fn', () => {
+			test('should return a promise', () => {
+				const fn = attempt.createAsync(async () => 5);
+				expect(fn()).toBeInstanceOf(Promise);
+			});
+
+			test('should forward parameters', () => {
+				const mockfn = vitest.fn();
+				attempt.createAsync(mockfn)(1, 2, 3);
+
+				expect(mockfn).toHaveBeenCalledWith(1, 2, 3);
+			});
+
+			test('should return success result if promise resolves', async () => {
+				const fn = attempt.createAsync(async () => 5);
+				expect(await fn()).toEqual(createResult(undefined, 5, true));
+			});
+
+			test('should return failure result if promise rejects', async () => {
+				const fn = attempt.createAsync(() => Promise.reject(new Error('test')));
+				expect(await fn()).toEqual(createResult(new Error('test'), undefined, false));
+			});
+		});
+	});
+
+	describe(attempt.create, () => {
+		describe('when parem function is synchronous', () => {
+			test('returns an attempt callback fn', () => {
+				const fn = attempt.create(() => 5);
+				expect(fn).toEqual(expect.any(Function));
+			});
+
+			describe('attempt.create -> fn', () => {
+				test('should forward parameters', () => {
+					const fn = vitest.fn();
+					attempt.create(fn)(1, 2, 3);
+
+					expect(fn).toHaveBeenCalledWith(1, 2, 3);
+				});
+
+				test('should return success result if function does not throw', () => {
+					const fn = attempt.create(() => 5);
+
+					expect(fn()).toEqual(createResult(undefined, 5, true));
+				});
+
+				test('should return failure result if function throws', () => {
+					const fn = attempt.create(() => {
+						throw new Error('test');
+					});
+
+					expect(fn()).toEqual(createResult(new Error('test'), undefined, false));
+				});
+			});
+		});
+
+		describe('when parameter function is async', () => {
+			test('should return a callback fn', () => {
+				const fn = attempt.create(async () => 5);
+				expect(fn).toEqual(expect.any(Function));
+			});
+
+			describe('expect.create -> fn', () => {
+				test('should return a promise', () => {
+					const fn = attempt.create(async () => 5);
+					expect(fn()).toBeInstanceOf(Promise);
+				});
+
+				test('should forward parameters', () => {
+					const mockfn = vitest.fn();
+					attempt.create(mockfn)(1, 2, 3);
+
+					expect(mockfn).toHaveBeenCalledWith(1, 2, 3);
+				});
+
+				test('should return success result if promise resolves', async () => {
+					const fn = attempt.create(async () => 5);
+					expect(await fn()).toEqual(createResult(undefined, 5, true));
+				});
+
+				test('should return failure result if promise rejects', async () => {
+					const fn = attempt.create(() => Promise.reject(new Error('test')));
+					expect(await fn()).toEqual(createResult(new Error('test'), undefined, false));
+				});
+			});
+		});
+	});
+
+	describe(attempt.builder, () => {
+		test('should apply custom error coersion', async () => {
+			const coerceError = vitest.fn(() => 'coerced-error');
+			const newAttempt = attempt.builder(coerceError);
+			const result = await newAttempt(() => {
+				return Promise.reject('some error');
+			});
+
+			expect(result.error).toEqual('coerced-error');
+		});
+	});
 });

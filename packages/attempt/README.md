@@ -176,7 +176,51 @@ Identical to the top‑level `attempt`. Provided for symmetry and readability wh
 
 ---
 
-### 7. `createAttempt(coerceError)`
+### 7. `attempt.create`
+
+Uses currying to allow you to create a function for reuse.
+
+```ts
+const attemptFn = attempt.create((p1, p2, p3) => { ... })
+
+// ... later in code
+
+const res1 = attemptFn(p1, p2, p3) // AttemptResult<TData, TError>
+const res2 = attemptFn(p1, p2, p3) // AttemptResult<TData, TError>
+const res3 = attemptFn(p1, p2, p3) // AttemptResult<TData, TError>
+```
+
+### 8. `attempt.createSync`
+
+Follows same pattern as `attempt.create` but enforces synchronous execution even when the function is asynchronous
+
+This is useful if you have a function that executes some synchronous logic and then returns a Promise
+
+```ts
+const myAttemptFn = attempt.createSync((p1, p2) => {
+	const result = executeSynchronousLogic(p1, p2);
+
+	if (!result.ok) throw new Error();
+
+	return functionThatReturnsPromise();
+});
+
+const res1 = myAttemptFn(p1, p2); // AttemptResult<Promise<TData>, TError>
+```
+
+### 9. `attempt.createAsync`
+
+Follows same pattern as `attempt.create` but ensures that the parameter function is treated as an asynchronous function.
+
+This is useful for functions that are poorly typed, or return `any`, but actually execute asynchronously
+
+```ts
+const myAttemptFn = attempt.createAsync(someUntypedFunction); // assume someUntypedFunction: any
+
+const result = await myAttemptFn(...args); // myAttemptFn(): Promise<AttemptResult<unknown, TError>>
+```
+
+### 10. `attempt.builder(coerceError)`
 
 Builds a **customised** attempt helper whose `.error` slot always conforms to _your_ shape.
 
@@ -200,7 +244,7 @@ All methods (`sync`, `async`, `promise`, `fn`, `any`) are available on the retur
 
 ---
 
-### 9. `DEFAULT_COERCE_ERROR`
+### 11. `DEFAULT_COERCE_ERROR`
 
 The built‑in coercion logic used by the default `attempt`.
 
@@ -211,9 +255,9 @@ The built‑in coercion logic used by the default `attempt`.
 You can re‑use it when composing your own coercer:
 
 ```ts
-import { createAttempt, DEFAULT_COERCE_ERROR } from '@ryact-utils/attempt';
+import { attempt, DEFAULT_COERCE_ERROR } from '@ryact-utils/attempt';
 
-const attemptPlus = createAttempt((x) => ({
+const attemptPlus = attempt.builder((x) => ({
 	original: DEFAULT_COERCE_ERROR(x), // keep stack trace
 	timestamp: Date.now(),
 }));
