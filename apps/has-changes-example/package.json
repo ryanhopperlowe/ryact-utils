@@ -11,6 +11,7 @@
 	},
 	"dependencies": {
 		"@ryact-utils/has-changes": "^0.0.5",
+		"@ryact-utils/pane": "workspace:*",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1"
 	},
