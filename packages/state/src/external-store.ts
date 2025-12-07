@@ -54,7 +54,6 @@ export abstract class ExternalStore<State> {
 
 	public readonly notify = () => {
 		this.listeners.forEach((notify) => notify());
-		console.log('notify react rerender!!');
 	};
 }
 

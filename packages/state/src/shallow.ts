@@ -75,10 +75,6 @@ export function useShallow<S, U>(selector: (state: S) => U): (state: S) => U {
 	const prev = React.useRef<U>(undefined);
 	return (state) => {
 		const next = selector(state);
-		const isShallowEqual = shallow(prev.current, next);
-
-		console.log('shallow is ' + isShallowEqual);
-
-		return isShallowEqual ? (prev.current as U) : (prev.current = next);
+		return shallow(prev.current, next) ? (prev.current as U) : (prev.current = next);
 	};
 }

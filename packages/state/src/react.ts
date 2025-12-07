@@ -27,10 +27,12 @@ export function useShallowStore<S, U>(
 	return useStore(store, useShallow(selector));
 }
 
-export function useSync<T extends object>(store: T) {
+export function useSync<T>(store: T): T;
+export function useSync<T, U>(store: T, selector: (state: T) => U): U;
+export function useSync<T extends object>(store: T, selector?: (state: T) => any) {
 	if (STORE in store) {
 		const hiddenStore = store[STORE] as ExternalStore<any>;
-		return useShallowStore<T>(hiddenStore);
+		return useShallowStore(hiddenStore, selector as any);
 	}
 
 	throw new Error('Provided store could not be resolved');
