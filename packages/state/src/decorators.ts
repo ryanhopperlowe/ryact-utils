@@ -40,6 +40,10 @@ export const store = ((target: new (...args: any[]) => any) => {
 				set: (obj, prop, newval) => {
 					const result = Reflect.set(obj, prop, newval);
 
+					if (obj[EXTERNAL_ACTIONS].has(prop)) {
+						obj[STORE].addAction(prop, (obj as any)[prop].bind(obj));
+					}
+
 					obj[STORE].observeChange(prop);
 
 					return result;
