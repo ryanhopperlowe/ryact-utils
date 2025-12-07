@@ -1,23 +1,16 @@
-import { SnapshotStore } from '@ryact-utils/pane';
+import { action, observable, store } from '@ryact-utils/pane';
 
+@store
 export class MyStore {
-	readonly store = new SnapshotStore(() => ({
-		name: this.name,
-		age: this.age,
-		setName: this.setName,
-		setAge: this.setAge,
-	}));
-
+	@observable
 	name = 'Ryan';
+
+	@observable
 	age = 28;
 
-	readonly setName = (name: string) => {
-		this.name = name;
-		this.store.notify();
-	};
-
-	readonly setAge = (age: number) => {
-		this.age = age;
-		this.store.notify();
-	};
+	@action
+	setSelf(self: { name?: string; age?: number }) {
+		this.name = self.name ?? this.name;
+		this.age = self.age ?? this.age;
+	}
 }

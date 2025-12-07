@@ -34,8 +34,7 @@
 		"vite-plugin-dts": "^4.5.4"
 	},
 	"dependencies": {
-		"@vitejs/plugin-react": "^4.3.4",
-		"zustand": "^5.0.9"
+		"@vitejs/plugin-react": "^4.3.4"
 	},
 	"peerDependencies": {
 		"react": ">=18.0.0",

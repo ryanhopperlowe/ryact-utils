@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
-import { useShallow } from 'zustand/shallow';
+import { STORE } from './decorators';
 import { ExternalStore } from './external-store';
+import { useShallow } from './shallow';
 
 const defaultSelector = <S>(state: S) => state;
 
@@ -26,4 +27,11 @@ export function useShallowStore<S, U>(
 	return useStore(store, useShallow(selector));
 }
 
-useStore.shallow = useShallowStore;
+export function useSync<T extends object>(store: T) {
+	if (STORE in store) {
+		const hiddenStore = store[STORE] as ExternalStore<any>;
+		return useShallowStore<T>(hiddenStore);
+	}
+
+	throw new Error('Provided store could not be resolved');
+}
