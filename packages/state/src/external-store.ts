@@ -1,6 +1,5 @@
-const ACTION_DEPTH = Symbol('action_running');
-const OBSERVERS = Symbol('observers');
-const ACTIONS = Symbol('actions');
+export const ACTION_DEPTH = Symbol('action_running');
+export const OBSERVERS = Symbol('observers');
 
 export abstract class ExternalStore<State> {
 	private readonly listeners: Set<() => void> = new Set();
@@ -9,7 +8,6 @@ export abstract class ExternalStore<State> {
 
 	private [ACTION_DEPTH] = 0;
 	private readonly [OBSERVERS] = new Set<PropertyKey>();
-	private readonly [ACTIONS] = new Map<PropertyKey, () => void>();
 
 	public get isRunningAction() {
 		return this[ACTION_DEPTH] > 0;
@@ -21,23 +19,16 @@ export abstract class ExternalStore<State> {
 
 	public readonly removeObserver = (id: PropertyKey) => this[OBSERVERS].delete(id);
 
-	public readonly addAction = (key: PropertyKey, action: (...args: any[]) => any) => {
-		this[ACTIONS].set(key, action);
-	};
-
-	public readonly getActions = () => {
-		const actions: Record<string, (...args: any[]) => any> = {};
-		this[ACTIONS].forEach((action, key) => {
-			actions[key.toString()] = action;
-		});
-		return actions;
-	};
-
 	public readonly action = <T>(action: () => T) => {
 		this[ACTION_DEPTH] += 1;
 		const result = action();
-		this.notify();
 		this[ACTION_DEPTH] -= 1;
+
+		if (this[ACTION_DEPTH] === 0) {
+			// only notify when the outermost synchronous action completes
+			this.notify();
+		}
+
 		return result;
 	};
 

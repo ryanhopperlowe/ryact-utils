@@ -1,50 +1,49 @@
 import { ExternalStore, SnapshotStore } from './external-store';
 
 export const STORE = Symbol('store');
+export const SNAPSHOT = Symbol('snapshot');
 export const EXTERNAL_OBSERVERS = Symbol('observers');
 export const EXTERNAL_ACTIONS = Symbol('actions');
+export const ACTIONS = Symbol('actions');
 
 type StoreInstance = {
 	[STORE]: ExternalStore<any>;
+	[SNAPSHOT]: () => any;
 	[EXTERNAL_OBSERVERS]: Set<PropertyKey>;
 	[EXTERNAL_ACTIONS]: Set<PropertyKey>;
+	[ACTIONS]: Record<PropertyKey, (...args: any[]) => any>;
 };
 
 export const store = ((target: new (...args: any[]) => any) => {
 	return class extends target implements StoreInstance {
-		[STORE]: SnapshotStore<any> = new SnapshotStore(() => {
-			const { [STORE]: _, ...store } = this;
+		[SNAPSHOT] = () => ({ ...this, ...this[ACTIONS] });
 
-			return {
-				...store,
-				...this[STORE].getActions(),
-			};
-		});
+		[STORE]: SnapshotStore<any> = new SnapshotStore(() => this[SNAPSHOT]());
 
 		[EXTERNAL_OBSERVERS] = (target.prototype[EXTERNAL_OBSERVERS] as Set<PropertyKey>) || new Set();
 
 		[EXTERNAL_ACTIONS] = (target.prototype[EXTERNAL_ACTIONS] as Set<PropertyKey>) || new Set();
 
+		[ACTIONS] = {};
+
 		constructor(...args: any[]) {
 			super(...args);
 
-			this[EXTERNAL_OBSERVERS].forEach((key) => {
-				this[STORE].addObserver(key);
-			});
-
-			this[EXTERNAL_ACTIONS].forEach((key) => {
-				this[STORE].addAction(key, (this as any)[key].bind(this));
-			});
+			this[ACTIONS] = Array.from(this[EXTERNAL_ACTIONS]).reduce(
+				(acc, key) => {
+					acc[key] = this[key as any].bind(this);
+					return acc;
+				},
+				{} as Record<PropertyKey, (...args: any[]) => any>,
+			);
 
 			return new Proxy(this, {
 				set: (obj, prop, newval) => {
 					const result = Reflect.set(obj, prop, newval);
 
-					if (obj[EXTERNAL_ACTIONS].has(prop)) {
-						obj[STORE].addAction(prop, (obj as any)[prop].bind(obj));
+					if (this[EXTERNAL_OBSERVERS].has(prop) && !this[STORE].isRunningAction) {
+						this[STORE].notify();
 					}
-
-					obj[STORE].observeChange(prop);
 
 					return result;
 				},
@@ -53,11 +52,16 @@ export const store = ((target: new (...args: any[]) => any) => {
 	};
 }) as ClassDecorator;
 
-export const action: MethodDecorator = (target, propertyKey, _descriptor) => {
+export const action: MethodDecorator = (target, propertyKey, descriptor) => {
 	const storeInstance = target as StoreInstance;
+	const original = descriptor.value as Function;
+
+	descriptor.value = function (this: StoreInstance, ...args: any[]) {
+		this[STORE].action(() => original.apply(this, args));
+	} as any;
 
 	if (!storeInstance[EXTERNAL_ACTIONS]) {
-		storeInstance[EXTERNAL_ACTIONS] = new Set<PropertyKey>();
+		storeInstance[EXTERNAL_ACTIONS] = new Set();
 	}
 	storeInstance[EXTERNAL_ACTIONS].add(propertyKey);
 };
