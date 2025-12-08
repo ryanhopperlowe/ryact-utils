@@ -53,19 +53,13 @@ export const store = ((target: new (...args: any[]) => any) => {
 	};
 }) as ClassDecorator;
 
-export const action: MethodDecorator = (target, propertyKey, descriptor) => {
+export const action: MethodDecorator = (target, propertyKey, _descriptor) => {
 	const storeInstance = target as StoreInstance;
-
-	const original = descriptor.value as Function;
 
 	if (!storeInstance[EXTERNAL_ACTIONS]) {
 		storeInstance[EXTERNAL_ACTIONS] = new Set<PropertyKey>();
 	}
 	storeInstance[EXTERNAL_ACTIONS].add(propertyKey);
-
-	descriptor.value = function (this: StoreInstance, ...args: any[]) {
-		this[STORE].action(() => original.apply(this, args));
-	} as any;
 };
 
 export const observable: PropertyDecorator = (target, propertyKey) => {
