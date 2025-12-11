@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { STORE } from './decorators';
+import { STORE } from './legacy-decorators';
 import { ExternalStore } from './external-store';
 import { useShallow } from './shallow';
 

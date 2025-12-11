@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { test as baseTest, describe } from 'vitest';
 import { SnapshotStore } from './external-store';
 import { useShallowStore, useStore, useSync } from './react';
-import { store } from './decorators';
+import { store } from './legacy-decorators';
 
 const test = baseTest.extend<{
 	store: { store: SnapshotStore<{ count: number }>; increment: () => void };

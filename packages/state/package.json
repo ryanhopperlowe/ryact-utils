@@ -11,6 +11,10 @@
 			"import": "./dist/index.js",
 			"types": "./dist/index.d.ts"
 		},
+		"./experimental-decorators": {
+			"import": "./dist/legacy-decorators.js",
+			"types": "./dist/legacy-decorators.d.ts"
+		},
 		"./react": {
 			"import": "./dist/react.js",
 			"types": "./dist/react.d.ts"
@@ -39,7 +43,8 @@
 		"vitest": "^4.0.15"
 	},
 	"dependencies": {
-		"@vitejs/plugin-react": "^4.3.4"
+		"@vitejs/plugin-react": "^4.3.4",
+		"nanoid": "^5.1.6"
 	},
 	"peerDependencies": {
 		"react": ">=18.0.0",

@@ -1,75 +1,85 @@
-import { ExternalStore, SnapshotStore } from './external-store';
+import { SnapshotStore } from './external-store';
 
-export const STORE = Symbol('store');
-export const SNAPSHOT = Symbol('snapshot');
-export const EXTERNAL_OBSERVERS = Symbol('observers');
-export const EXTERNAL_ACTIONS = Symbol('actions');
-export const ACTIONS = Symbol('actions');
+type Constructor = new (...args: any[]) => {};
+type ObserveCallback = (fieldName: PropertyKey, oldValue: any, newValue: any) => void;
 
-type StoreInstance = {
-	[STORE]: ExternalStore<any>;
-	[SNAPSHOT]: () => any;
-	[EXTERNAL_OBSERVERS]: Set<PropertyKey>;
-	[EXTERNAL_ACTIONS]: Set<PropertyKey>;
-	[ACTIONS]: Record<PropertyKey, (...args: any[]) => any>;
+const OBSERVABLES = Symbol('observables');
+const STORE = Symbol('store');
+
+type HiddenStore = {
+	[OBSERVABLES]: Set<Function>;
+	[STORE]: SnapshotStore<any>;
 };
 
-export const store = ((target: new (...args: any[]) => any) => {
-	return class extends target implements StoreInstance {
-		[SNAPSHOT] = () => ({ ...this, ...this[ACTIONS] });
+const store = () => {
+	return <T extends Constructor>(target: T, _context: ClassDecoratorContext) => {
+		return class extends target implements HiddenStore {
+			[OBSERVABLES] = new Set<ObserveCallback>();
 
-		[STORE]: SnapshotStore<any> = new SnapshotStore(() => this[SNAPSHOT]());
+			[STORE] = new SnapshotStore(() => ({ ...this }));
 
-		[EXTERNAL_OBSERVERS] = (target.prototype[EXTERNAL_OBSERVERS] as Set<PropertyKey>) || new Set();
+			constructor(...args: any[]) {
+				super(...args);
 
-		[EXTERNAL_ACTIONS] = (target.prototype[EXTERNAL_ACTIONS] as Set<PropertyKey>) || new Set();
+				return new Proxy(this, {
+					get(t, p, r) {
+						return Reflect.get(t, p, r);
+					},
+					set(t, p, value, r) {
+						return Reflect.set(t, p, value, r);
+					},
+				});
+			}
+		};
+	};
+};
 
-		[ACTIONS] = {};
+const observable = () => {
+	return (_target: undefined, context: ClassFieldDecoratorContext) => {
+		const fieldName = String(context.name);
 
-		constructor(...args: any[]) {
-			super(...args);
+		// Use a private symbol to store the actual backing data securely
+		const privateStoreKey = Symbol(fieldName);
 
-			this[ACTIONS] = Array.from(this[EXTERNAL_ACTIONS]).reduce(
-				(acc, key) => {
-					acc[key] = this[key as any].bind(this);
-					return acc;
+		context.addInitializer(function (this: any) {
+			const initialValue = this[fieldName];
+
+			// We assume the makeObservable decorator has been applied and 'notify' exists
+			const observableInstance = this as HiddenStore;
+
+			// Redefine the property on the instance using Object.defineProperty
+			Object.defineProperty(this, fieldName, {
+				get() {
+					return this[privateStoreKey];
 				},
-				{} as Record<PropertyKey, (...args: any[]) => any>,
-			);
-
-			return new Proxy(this, {
-				set: (obj, prop, newval) => {
-					const result = Reflect.set(obj, prop, newval);
-
-					if (this[EXTERNAL_OBSERVERS].has(prop) && !this[STORE].isRunningAction) {
-						this[STORE].notify();
+				set(newValue: any) {
+					const oldValue = this[privateStoreKey];
+					this[privateStoreKey] = newValue;
+					// Call the notification function provided by the class decorator
+					if (!Object.is(oldValue, newValue)) {
+						observableInstance[STORE].notify();
 					}
-
-					return result;
 				},
 			});
-		}
+
+			this[privateStoreKey] = initialValue;
+		});
 	};
-}) as ClassDecorator;
-
-export const action: MethodDecorator = (target, propertyKey, descriptor) => {
-	const storeInstance = target as StoreInstance;
-	const original = descriptor.value as Function;
-
-	descriptor.value = function (this: StoreInstance, ...args: any[]) {
-		this[STORE].action(() => original.apply(this, args));
-	} as any;
-
-	if (!storeInstance[EXTERNAL_ACTIONS]) {
-		storeInstance[EXTERNAL_ACTIONS] = new Set();
-	}
-	storeInstance[EXTERNAL_ACTIONS].add(propertyKey);
 };
 
-export const observable: PropertyDecorator = (target, propertyKey) => {
-	const storeInstance = target as StoreInstance;
-	if (!storeInstance[EXTERNAL_OBSERVERS]) {
-		storeInstance[EXTERNAL_OBSERVERS] = new Set<PropertyKey>();
+@store()
+class MyClass {
+	@observable() count = 0;
+
+	increment() {
+		this.count += 1;
 	}
-	storeInstance[EXTERNAL_OBSERVERS].add(propertyKey);
-};
+}
+
+const instance = new MyClass();
+console.log(instance.count);
+
+instance.increment();
+
+const { count } = instance;
+console.log(count);

@@ -28,6 +28,7 @@ export default defineConfig({
 			entry: {
 				index: resolve(__dirname, './src/index.ts'),
 				react: resolve(__dirname, './src/react.ts'),
+				'experimental-decorators': resolve(__dirname, './src/legacy-decorators.ts'),
 			},
 			formats: ['es'],
 		},
