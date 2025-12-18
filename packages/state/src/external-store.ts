@@ -8,38 +8,6 @@ export abstract class ExternalStore<State> {
 
 	public abstract readonly snapshot: () => State;
 
-	private [ACTION_DEPTH] = 0;
-	private readonly [OBSERVERS] = new Set<PropertyKey>();
-
-	public get isRunningAction() {
-		return this[ACTION_DEPTH] > 0;
-	}
-
-	public readonly addObserver = (key: PropertyKey) => {
-		this[OBSERVERS].add(key);
-	};
-
-	public readonly removeObserver = (id: PropertyKey) => this[OBSERVERS].delete(id);
-
-	public readonly action = <T>(action: () => T) => {
-		this[ACTION_DEPTH] += 1;
-		const result = action();
-		this[ACTION_DEPTH] -= 1;
-
-		if (this[ACTION_DEPTH] === 0) {
-			// only notify when the outermost synchronous action completes
-			this.notify();
-		}
-
-		return result;
-	};
-
-	public readonly observeChange = (id: PropertyKey) => {
-		if (this[OBSERVERS].has(id) && !this.isRunningAction) {
-			this.notify();
-		}
-	};
-
 	public readonly subscribe = (listener: () => void) => {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
@@ -47,7 +15,7 @@ export abstract class ExternalStore<State> {
 
 	public notify = () => {
 		this.listeners.forEach((notify) => notify());
-		console.log('notify!!');
+		console.log('rerender!!');
 	};
 }
 
@@ -65,153 +33,215 @@ export class SnapshotStore<State> extends ExternalStore<State> {
 	};
 }
 
-class ObservableManager {
-	observables = new Set<Observable<any>>();
-	computables = new Set<Computable<any>>();
-	computeSubs = new Set<() => void>();
+type ObservableRecord<T extends object> = { [Key in keyof T]: Observable<T[Key]> };
 
-	computedDeps: Map<Computable, Set<Observable>> = new Map();
+export class ObservableObject<T extends object = any> implements Observable<T> {
+	private observables: ObservableRecord<any>;
+	private state: T;
 
-	computing = new Set<Id>();
+	private cleanupFns = new Set<() => void>();
 
-	private readonly watchComputedObservable = (computed: Computable, observable: Observable) => {
-		if (!this.computedDeps.has(computed)) {
-			this.computedDeps.set(computed, new Set());
+	private getObservers = new Set<() => void>();
+	private setObservers = new Set<() => void>();
+
+	private actionDepth = 0;
+	get isRunningAction() {
+		return this.actionDepth > 0;
+	}
+
+	constructor(init: ObservableRecord<T>) {
+		// init state property
+		this.observables = {} as ObservableRecord<T>;
+		this.state = {} as T;
+		for (const [key, val] of Object.entries(init)) {
+			this.initProperty(key, val as Observable);
 		}
 
-		const deps = this.computedDeps.get(computed)!;
+		const allObservables: Observable[] = Object.values(this.observables);
+		const computables = allObservables.filter((o) => o instanceof ComputedValue);
 
-		if (deps.has(observable)) return;
+		// subscribe computables
+		for (const computable of computables) {
+			allObservables
+				.filter((o) => o != computable) // don't watch self
+				.map((o) => computable.watchObservable(o))
+				.forEach((unsub) => this.cleanupFns.add(unsub));
+		}
 
-		let unsubSet: () => void;
+		computables.forEach((c) => c.init());
 
-		const unsubGet = observable.observeGet(() => {
-			deps.add(observable);
-			unsubSet = observable.observeSet(() => computed.invalidate());
-		});
+		const values = allObservables.filter((o) => o instanceof ObservableRef);
+		values
+			.map((o) =>
+				o.observeSet(() => {
+					if (!this.isRunningAction) {
+						this.setObservers.forEach((notify) => notify());
+					}
+				}),
+			)
+			.forEach((unsub) => this.cleanupFns.add(unsub));
 
-		return () => {
-			unsubGet();
-			unsubSet();
+		allObservables
+			.map((o) => o.observeGet(() => this.getObservers.forEach((notify) => notify())))
+			.forEach((unsub) => this.cleanupFns.add(unsub));
+	}
+
+	readonly get = () => this.state;
+
+	readonly observeGet = (notify: () => void) => {
+		this.getObservers.add(notify);
+
+		return () => void this.getObservers.delete(notify);
+	};
+
+	readonly observeSet = (notify: () => void) => {
+		this.setObservers.add(notify);
+		return () => void this.setObservers.delete(notify);
+	};
+
+	private readonly initProperty = (key: string | number, observable: Observable) => {
+		this.observables[key] = observable;
+
+		const descriptor: PropertyDescriptor = {
+			get: () => observable.get(),
 		};
+
+		if (observable instanceof ObservableRef) {
+			descriptor.set = (val) => observable.set(val);
+		}
+
+		Object.defineProperty(this.state, key, descriptor);
 	};
 
-	readonly addComputed = <T>(computed: Computable<T>) => {
-		this.computables.add(computed);
-		const observerUnsubs = new Set<() => void>();
+	public readonly action = <T>(fn: () => T) => {
+		this.actionDepth += 1;
+		const response = fn();
+		this.actionDepth -= 1;
 
-		const unsubFromCompute = this.subscribeComputed(computed);
+		if (!this.isRunningAction) {
+			this.setObservers.forEach((notify) => notify());
+		}
 
-		return () => {
-			unsubFromCompute();
-			observerUnsubs.forEach((unsub) => unsub());
-			this.computables.delete(computed);
-		};
+		return response;
 	};
 
-	private readonly subscribeComputed = <T>(computed: Computable<T>) => {
-		return computed.subscribeCompute(() => {
-			const unsubs = Array.from(this.observables).map((o) => {
-				return this.watchComputedObservable(computed, o);
-			});
-
-			return () => unsubs.forEach((unsub) => unsub?.());
-		});
-	};
-
-	private readonly cleanupComputedSubscriptions = () => {
-		this.computeSubs.forEach((unsub) => unsub());
-	};
-
-	readonly subscribeChanges = (notify: () => void) => {
-		const unsubs = Array.from(this.observables).map((o) => o.observeSet(() => notify()));
-		return () => unsubs.forEach((unsub) => unsub());
-	};
-
-	readonly addObserver = <T>(observable: Observable<T>) => {
-		this.observables.add(observable);
-
-		this.cleanupComputedSubscriptions();
-
-		const unsubs = Array.from(this.computables).map((c) => this.subscribeComputed(c));
-		unsubs.forEach((unsub) => this.computeSubs.add(unsub));
-
-		return () => void this.observables.delete(observable);
+	public readonly actionDef = <Args extends unknown[], T>(fn: (...args: Args) => T) => {
+		return (...args: Args) => this.action(() => fn(...args));
 	};
 }
 
-type Listener = (id: Id) => void;
-type Subscriber = (id: Id) => void | ((id: Id) => void);
+interface Observable<T = any> {
+	get: () => T;
+	observeGet: (notify: () => void) => () => void;
+	observeSet: (notify: () => void) => () => void;
+}
 
-export class Computable<T = unknown> {
+export class ComputedValue<T = unknown> implements Observable<T> {
 	readonly id: Id = nanoid();
 
-	private readonly compute: () => T;
+	private readonly computeFn: () => T;
 	private cachedValue!: T;
 	private invalid!: boolean;
-	private subscribers = new Set<Subscriber>();
+
+	private watching = new Set<Observable>();
+	private deps = new Map<Observable, () => void>();
+
+	private getObservers = new Set<() => void>();
+	private setObservers = new Set<() => void>();
 
 	constructor(compute: () => T) {
-		this.compute = compute;
-		this.recompute();
+		this.computeFn = compute;
+		// this.recompute();
 	}
 
-	public readonly subscribeCompute = (subscriber: Subscriber) => {
-		this.subscribers.add(subscriber);
-		return () => void this.subscribers.delete(subscriber);
+	public readonly init = () => this.recompute();
+
+	public readonly watchObservable = (observable: Observable) => {
+		this.watching.add(observable);
+		return () => this.watching.delete(observable);
+	};
+
+	public readonly unwatchObservable = (observable: ObservableRef) => {
+		this.watching.delete(observable);
+		this.deps.delete(observable);
+	};
+
+	public readonly observeGet = (notify: () => void) => {
+		this.getObservers.add(notify);
+		return () => this.getObservers.delete(notify);
+	};
+
+	public readonly observeSet = (notify: () => void) => {
+		this.setObservers.add(notify);
+		return () => this.setObservers.delete(notify);
 	};
 
 	public readonly invalidate = () => void (this.invalid = true);
 
 	public readonly recompute = () => {
-		const endSubscribers = Array.from(this.subscribers).map((notifyStart) => notifyStart(this.id));
+		// subscribe to all observable getters
+		const getterSubs = Array.from(this.watching).map((o) => {
+			if (this.deps.has(o)) return;
 
-		this.cachedValue = this.compute();
+			return o.observeGet(() => {
+				// when an observer is read during computation, store it as a dependency
+				const unsub = o.observeSet(() => this.invalidate());
+				this.deps.set(o, unsub);
+			});
+		});
 
-		endSubscribers.forEach((notifyEnd) => notifyEnd?.(this.id));
+		// compute value and cache for later
+		console.log('recomputing');
+
+		this.cachedValue = this.computeFn();
+		this.setObservers.forEach((notify) => notify());
+
+		// unsubscribe from observable getters
+		getterSubs.forEach((unsub) => unsub?.());
 
 		this.invalid = false;
 		return this.cachedValue;
 	};
 
 	public readonly get = () => {
+		this.getObservers.forEach((notify) => notify());
+
 		return this.invalid ? this.recompute() : this.cachedValue;
 	};
 }
 
 type Comparator<T> = (before: T, after: T) => boolean;
 
-export class Observable<T = unknown> {
-	readonly id: Id = nanoid();
-
+export class ObservableRef<T = any> implements Observable<T> {
 	private comparator: Comparator<T>;
 
 	private _value: T;
-	private setObservers = new Set<(id: Id) => void>();
-	private getObservers = new Set<(id: Id) => void>();
+	private setObservers = new Set<() => void>();
+	private getObservers = new Set<() => void>();
 
 	constructor(initialValue: T, comparator: Comparator<T> = Object.is) {
 		this._value = initialValue;
 		this.comparator = comparator;
 	}
 
-	public get val() {
-		return this.getValue();
-	}
-
-	public set val(newValue: T) {
-		this.setValue(newValue);
-	}
-
-	public setValue(newValue: T) {
-		if (this.comparator(this._value, newValue)) return;
+	public set(newValue: T) {
+		let isNotChanged = this.comparator(this._value, newValue);
 
 		this._value = newValue;
-		this.setObservers.forEach((notify) => notify(this.id));
+
+		if (isNotChanged) return;
+
+		console.log('notify set ' + newValue);
+
+		this.setObservers.forEach((notify) => notify());
 	}
 
-	public getValue() {
-		this.getObservers.forEach((notify) => notify(this.id));
+	public get() {
+		this.getObservers.forEach((notify) => notify());
+		return this._value;
+	}
+
+	public peek() {
 		return this._value;
 	}
 
@@ -226,72 +256,34 @@ export class Observable<T = unknown> {
 	};
 }
 
-type Compute<T, U = unknown> = (state: T) => U;
+class Person {
+	// @observable
+	name = new ObservableRef('Ryan');
+	// @observable
+	age = new ObservableRef(28);
 
-type ObservableState<T extends object> = {
-	[Key in keyof T]: Observable<T[Key]>;
-};
+	// @computed get
+	greeting = new ComputedValue(() => `Hello, I'm ${this.name.get()} nice to meet you!`);
 
-type ComputeMethods<State extends object, ComputedState extends object> = {
-	[Key in keyof ComputedState]: (state: ObservableState<State>) => ComputedState[Key];
-};
+	// will be hidden behind the @store decorator
+	manager = new ObservableObject({ name: this.name, age: this.age, greeting: this.greeting });
+	store = new SnapshotStore(() => this.manager.get());
 
-type ComputableState<T extends Object> = {
-	[Key in keyof T]: Computable<T[Key]>;
-};
-
-export class ObservableStore<
-	State extends object,
-	ComputedState extends object = { [key: string]: never },
-> {
-	private observableMap: ObservableState<State>;
-	private computableMap: ComputableState<ComputedState>;
-
-	private observableState = new ObservableManager();
-
-	private cleanupFns = new Set<() => void>();
-
-	private state: State;
-	private computed: ComputedState;
-
-	constructor(initialState: State, computeds: ComputeMethods<State, ComputedState> = {} as any) {
-		this.observableMap = {} as any;
-		this.state = {} as any;
-		for (const [key, init] of Object.entries(initialState)) {
-			this.initProperty(key as keyof State, init);
-		}
-
-		this.computableMap = {} as any;
-		this.computed = {} as any;
-		for (const [key, compute] of Object.entries(computeds)) {
-			this.initComputable(key as keyof ComputedState, compute as any);
-		}
+	constructor() {
+		this.manager.observeSet(() => this.store.notify());
 	}
 
-	private readonly initProperty = <TProp extends keyof State>(prop: TProp, init: State[TProp]) => {
-		const observable = new Observable(init);
-		this.observableMap[prop] = observable;
-		Object.defineProperty(this.state, prop, {
-			get: () => observable.getValue(),
-			set: (val) => observable.setValue(val),
-		});
-		const unsub = this.observableState.addObserver(observable);
-		this.cleanupFns.add(unsub);
-	};
+	setName(name: string) {
+		this.name.set(name);
+	}
 
-	private readonly initComputable = <TProp extends keyof ComputedState>(
-		prop: TProp,
-		compute: (state: ObservableState<State>) => ComputedState[TProp],
-	) => {
-		const computed = new Computable(() => compute(this.observableMap));
-		this.computableMap[prop] = computed;
-		Object.defineProperty(this.computed, prop, {
-			get: () => computed.get(),
-			writable: false,
-		});
-		const unsub = this.observableState.addComputed(computed);
-		this.cleanupFns.add(unsub);
-	};
+	setAge(age: number) {
+		this.age.set(age);
+	}
 }
 
-console.log(x);
+const person = new Person();
+person.setAge(10);
+console.log(person.store.snapshot().greeting);
+person.setName('hi');
+console.log(person.store.snapshot().greeting);
