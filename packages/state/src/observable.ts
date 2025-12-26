@@ -5,6 +5,11 @@ type Listener = () => void;
 const proxyListeners = new WeakMap<object, Set<Listener>>();
 const cleanupListeners = new WeakMap<object, () => void>();
 
+let batchDepth = 0;
+let isBatching = false;
+const pendingUpdates = new Set<object>();
+const batchNotified = new Set<object>();
+
 function makeProxy<T extends object>(target: T) {
 	if (proxyCache.has(target)) {
 		return proxyCache.get(target) as T;
@@ -13,10 +18,6 @@ function makeProxy<T extends object>(target: T) {
 	const listeners = new Set<Listener>();
 	const cleanupFns = new Set<() => void>();
 	const propCleanupFns = new WeakMap<object, Listener>();
-
-	const handleNotify = () => {
-		listeners.forEach((listener) => listener());
-	};
 
 	const proxy = new Proxy(target, {
 		set: (t, p, v, r) => {
@@ -36,10 +37,6 @@ function makeProxy<T extends object>(target: T) {
 
 			if (hasChanged && result) {
 				handleNotify();
-			}
-
-			if (typeof existing === 'object' && existing !== null && propCleanupFns.has(existing)) {
-				propCleanupFns.get(existing)!();
 			}
 
 			return result;
@@ -71,6 +68,10 @@ function makeProxy<T extends object>(target: T) {
 
 	return proxy;
 
+	function handleNotify() {
+		notifyProxy(proxy);
+	}
+
 	function cleanupProp(obj: unknown) {
 		if (typeof obj === 'object' && obj !== null && propCleanupFns.has(obj)) {
 			propCleanupFns.get(obj)!();
@@ -83,10 +84,58 @@ function makeProxy<T extends object>(target: T) {
 			propListeners.add(handleNotify);
 
 			const cleanup = () => propListeners.delete(handleNotify);
-
 			propCleanupFns.set(obj, cleanup);
 			cleanupFns.add(cleanup);
 		}
+	}
+}
+
+function notifyProxy<T extends object>(proxy: T) {
+	if (isBatching) {
+		pendingUpdates.add(proxy);
+		return;
+	}
+
+	if (batchNotified.has(proxy)) {
+		return;
+	}
+
+	const listeners = proxyListeners.get(proxy);
+	if (listeners) {
+		listeners.forEach((listener) => listener());
+	}
+
+	if (pendingUpdates.size > 0) {
+		batchNotified.add(proxy);
+	}
+}
+
+function startBatch() {
+	batchDepth += 1;
+	isBatching = true;
+}
+
+function endBatch() {
+	batchDepth -= 1;
+
+	if (batchDepth <= 0) {
+		isBatching = false;
+		// Notify all pending updates
+		pendingUpdates.forEach((proxy) => {
+			notifyProxy(proxy);
+		});
+
+		pendingUpdates.clear();
+		batchNotified.clear();
+	}
+}
+
+function batch<T>(fn: () => T) {
+	startBatch();
+	try {
+		return fn();
+	} finally {
+		endBatch();
 	}
 }
 
@@ -140,23 +189,3 @@ class Person {
 		this.info.age = age;
 	}
 }
-
-const observable = makeProxy(new Person());
-
-subscribeProxy(observable, () => {
-	console.log('Observable changed:', getProxySnapshot(observable));
-});
-
-console.log(observable);
-
-const ogInfo = observable.info;
-subscribeProxy(ogInfo, () => {
-	console.log('OG Info changed:', getProxySnapshot(ogInfo));
-});
-
-ogInfo.age = 10;
-
-observable.info = { name: 'Bob', age: 25 };
-observable.info.name = 'Dave';
-
-ogInfo.name = 'Charlie';
