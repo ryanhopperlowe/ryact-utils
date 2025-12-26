@@ -11,6 +11,10 @@ const pendingUpdates = new Set<object>();
 const batchNotified = new Set<object>();
 
 function makeProxy<T extends object>(target: T) {
+	if (proxySet.has(target)) {
+		return target;
+	}
+
 	if (proxyCache.has(target)) {
 		return proxyCache.get(target) as T;
 	}
