@@ -24,6 +24,14 @@ function makeProxy<T extends object>(target: T) {
 	const propCleanupFns = new WeakMap<object, Listener>();
 
 	const proxy = new Proxy(target, {
+		get: (t, p, r) => {
+			if (currentCompute) {
+				cleanupComputed(p);
+				subComputed(currentCompute, p);
+			}
+
+			return Reflect.get(t, p, r);
+		},
 		set: (t, p, v, r) => {
 			let newVal = v;
 
@@ -40,6 +48,7 @@ function makeProxy<T extends object>(target: T) {
 			const result = Reflect.set(t, p, newVal, r);
 
 			if (hasChanged && result) {
+				notifyComputedDepChanged(p);
 				handleNotify();
 			}
 
@@ -47,6 +56,9 @@ function makeProxy<T extends object>(target: T) {
 		},
 		deleteProperty: (t, p) => {
 			const existing = Reflect.get(t, p);
+
+			notifyComputedDepChanged(p);
+			cleanupComputed(p);
 
 			cleanupProp(existing);
 
@@ -60,6 +72,7 @@ function makeProxy<T extends object>(target: T) {
 		},
 	});
 
+	proxySet.add(proxy);
 	proxyCache.set(target, proxy);
 	proxyListeners.set(proxy, listeners);
 	cleanupListeners.set(proxy, () => {
@@ -74,6 +87,34 @@ function makeProxy<T extends object>(target: T) {
 
 	function handleNotify() {
 		notifyProxy(proxy);
+	}
+
+	function notifyComputedDepChanged(prop: PropertyKey) {
+		const computeFns = propComputeFns.get(prop);
+		if (computeFns) {
+			computeFns.forEach((notify) => notify());
+		}
+	}
+
+	function subComputed(computedFn: Function, prop: PropertyKey) {
+		if (!computedFn) return;
+
+		if (computedCache.has(computedFn)) {
+			console.log('compute dep added: ', prop);
+
+			const invalidateFn = () => invalidateComputed(computedFn);
+			const propComputeMap = propComputeFns.get(prop) || new Map<Function, () => void>();
+			propComputeMap.set(computedFn, invalidateFn);
+			propComputeFns.set(prop, propComputeMap);
+		}
+	}
+
+	function cleanupComputed(prop: PropertyKey) {
+		const cleanupFns = propComputeCleanupFns.get(prop);
+		if (cleanupFns) {
+			cleanupFns.forEach((cleanup) => cleanup());
+			propComputeCleanupFns.delete(prop);
+		}
 	}
 
 	function cleanupProp(obj: unknown) {
@@ -140,6 +181,46 @@ function batch<T>(fn: () => T) {
 		return fn();
 	} finally {
 		endBatch();
+	}
+}
+
+type ComputedState = {
+	cachedValue: any;
+	isValid: boolean;
+};
+
+let currentCompute: Function | null = null;
+const computedCache = new WeakMap<Function, ComputedState>();
+
+function computed<T>(fn: () => T) {
+	return () => {
+		const info = computedCache.get(fn) ?? ({ isValid: false } as ComputedState);
+
+		if (info.isValid) {
+			return info.cachedValue as T;
+		}
+
+		try {
+			currentCompute = fn;
+
+			computedCache.set(fn, info);
+
+			const value = fn();
+
+			info.isValid = true;
+			info.cachedValue = value;
+
+			return value;
+		} finally {
+			currentCompute = null;
+		}
+	};
+}
+
+function invalidateComputed(fn: Function) {
+	const info = computedCache.get(fn);
+	if (info) {
+		info.isValid = false;
 	}
 }
 
