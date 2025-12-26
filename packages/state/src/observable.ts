@@ -1,4 +1,3 @@
-import { cleanup } from '@testing-library/react';
 const proxyCache = new WeakMap<object, any>();
 
 type Listener = () => void;
@@ -12,6 +11,8 @@ function makeProxy<T extends object>(target: T) {
 	}
 
 	const listeners = new Set<Listener>();
+	const cleanupFns = new Set<() => void>();
+	const propCleanupFns = new WeakMap<object, Listener>();
 
 	const handleNotify = () => {
 		listeners.forEach((listener) => listener());
@@ -19,30 +20,35 @@ function makeProxy<T extends object>(target: T) {
 
 	const proxy = new Proxy(target, {
 		set: (t, p, v, r) => {
-			debugger;
+			let newVal = v;
+
 			const existing = Reflect.get(t, p, r);
 
-			let newVal = v;
+			cleanupProp(existing);
 
 			if (typeof v === 'object' && v !== null) {
 				newVal = makeProxy(v);
-
-				const propListeners = proxyListeners.get(newVal);
-				if (propListeners) {
-					propListeners.add(handleNotify);
-				}
+				subProp(newVal);
 			}
 
 			const hasChanged = !Object.is(existing, newVal);
 			const result = Reflect.set(t, p, newVal, r);
+
 			if (hasChanged && result) {
 				handleNotify();
+			}
+
+			if (typeof existing === 'object' && existing !== null && propCleanupFns.has(existing)) {
+				propCleanupFns.get(existing)!();
 			}
 
 			return result;
 		},
 		deleteProperty: (t, p) => {
 			const existing = Reflect.get(t, p);
+
+			cleanupProp(existing);
+
 			const result = Reflect.deleteProperty(t, p);
 
 			if (result && existing !== undefined) {
@@ -55,12 +61,33 @@ function makeProxy<T extends object>(target: T) {
 
 	proxyCache.set(target, proxy);
 	proxyListeners.set(proxy, listeners);
+	cleanupListeners.set(proxy, () => {
+		cleanupFns.forEach((fn) => fn());
+	});
 
 	for (const [key, value] of Object.entries(target)) {
 		proxy[key as keyof T] = value;
 	}
 
 	return proxy;
+
+	function cleanupProp(obj: unknown) {
+		if (typeof obj === 'object' && obj !== null && propCleanupFns.has(obj)) {
+			propCleanupFns.get(obj)!();
+		}
+	}
+
+	function subProp(obj: object) {
+		const propListeners = proxyListeners.get(obj);
+		if (propListeners) {
+			propListeners.add(handleNotify);
+
+			const cleanup = () => propListeners.delete(handleNotify);
+
+			propCleanupFns.set(obj, cleanup);
+			cleanupFns.add(cleanup);
+		}
+	}
 }
 
 function subscribeProxy<T extends object>(proxy: T, listener: Listener) {
@@ -116,12 +143,20 @@ class Person {
 
 const observable = makeProxy(new Person());
 
-console.log(observable);
-
 subscribeProxy(observable, () => {
 	console.log('Observable changed:', getProxySnapshot(observable));
 });
 
-console.log(getProxySnapshot(observable));
-observable.setName('Bob');
-observable.setAge(31);
+console.log(observable);
+
+const ogInfo = observable.info;
+subscribeProxy(ogInfo, () => {
+	console.log('OG Info changed:', getProxySnapshot(ogInfo));
+});
+
+ogInfo.age = 10;
+
+observable.info = { name: 'Bob', age: 25 };
+observable.info.name = 'Dave';
+
+ogInfo.name = 'Charlie';
