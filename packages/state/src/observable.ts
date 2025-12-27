@@ -1,4 +1,5 @@
 const proxyCache = new WeakMap<object, any>();
+const proxySet = new WeakSet<object>();
 
 type Listener = () => void;
 
@@ -22,12 +23,17 @@ function makeProxy<T extends object>(target: T) {
 	const listeners = new Set<Listener>();
 	const cleanupFns = new Set<() => void>();
 	const propCleanupFns = new WeakMap<object, Listener>();
+	const propComputeFns = new Map<PropertyKey, Map<Function, () => void>>();
+	const propComputeCleanupFns = new Map<PropertyKey, Set<() => void>>();
 
 	const proxy = new Proxy(target, {
 		get: (t, p, r) => {
-			if (currentCompute) {
+			if (isComputing()) {
 				cleanupComputed(p);
-				subComputed(currentCompute, p);
+
+				computeStack.forEach((fn) => {
+					subComputed(fn, p);
+				});
 			}
 
 			return Reflect.get(t, p, r);
@@ -175,7 +181,7 @@ function endBatch() {
 	}
 }
 
-function batch<T>(fn: () => T) {
+export function batch<T>(fn: () => T) {
 	startBatch();
 	try {
 		return fn();
@@ -189,42 +195,62 @@ type ComputedState = {
 	isValid: boolean;
 };
 
-let currentCompute: Function | null = null;
+const computeStack: Function[] = [];
+const isComputing = () => computeStack.length > 0;
 const computedCache = new WeakMap<Function, ComputedState>();
 
-function computed<T>(fn: () => T) {
-	return () => {
-		const info = computedCache.get(fn) ?? ({ isValid: false } as ComputedState);
+type ComputedFn<T = any> = {
+	(): T;
+	bindProxy: (proxy: object) => ComputedFn<T>;
+};
+
+export function computed<T>(fn: () => T): ComputedFn<T> {
+	let boundFn = fn;
+
+	const res = () => {
+		const info = computedCache.get(boundFn) ?? ({ isValid: false } as ComputedState);
 
 		if (info.isValid) {
+			console.log('cache hit');
+
 			return info.cachedValue as T;
 		}
 
 		try {
-			currentCompute = fn;
+			console.log('cache miss: start computing');
 
-			computedCache.set(fn, info);
+			computeStack.push(boundFn);
 
-			const value = fn();
+			computedCache.set(boundFn, info);
 
+			const value = boundFn();
 			info.isValid = true;
 			info.cachedValue = value;
 
 			return value;
 		} finally {
-			currentCompute = null;
+			computeStack.pop();
 		}
 	};
+
+	res.bindProxy = (proxy: any) => {
+		boundFn = fn.bind(proxy);
+		return res;
+	};
+
+	return res;
 }
 
 function invalidateComputed(fn: Function) {
+	console.log('invalidate computed');
+
 	const info = computedCache.get(fn);
 	if (info) {
 		info.isValid = false;
 	}
 }
 
-function subscribeProxy<T extends object>(proxy: T, listener: Listener) {
+export function subscribeProxy<T extends object>(proxy: T, listener: Listener) {
 	const listeners = proxyListeners.get(proxy);
 
 	if (listeners) {
@@ -237,13 +263,18 @@ function subscribeProxy<T extends object>(proxy: T, listener: Listener) {
 	throw new Error('Cannot subscribe to non-proxy object');
 }
 
-function getProxySnapshot<T extends object>(proxy: T) {
+export function getProxySnapshot<T extends object>(proxy: T) {
 	const snapshot = new Proxy(proxy, {
 		get(t, p, r) {
 			const value = Reflect.get(t, p, r);
 			if (typeof value === 'object' && value !== null) {
 				return getProxySnapshot(value);
 			}
+
+			if (typeof value === 'function') {
+				return value.bind(proxy);
+			}
+
 			return value;
 		},
 		set() {
@@ -264,6 +295,14 @@ class Person {
 	constructor() {
 		this.info = { name: 'Alice', age: 30 };
 		this.version = 1;
+
+		const proxy = makeProxy(this);
+
+		this.versionGreeting.bindProxy(proxy);
+		this.greeting.bindProxy(proxy);
+		this.greetings.bindProxy(proxy);
+
+		return proxy;
 	}
 
 	setName(name: string) {
@@ -273,4 +312,72 @@ class Person {
 	setAge(age: number) {
 		this.info.age = age;
 	}
+
+	incVersion() {
+		this.version += 1;
+	}
+
+	greeting = computed(function (this: Person) {
+		return `Hello, I'm ${this.info.name} and I'm ${this.info.age} years old.`;
+	});
+
+	versionGreeting = computed(function (this: Person) {
+		return `Version ${this.version}`;
+	});
+
+	greetings = computed(function (this: Person) {
+		return [this.versionGreeting(), this.greeting()].join(' - ');
+	});
 }
+
+type Prettify<T extends object> = {
+	[K in keyof T]: T[K];
+} & {};
+
+export function makeStore<T extends object, C extends Record<Exclude<string, keyof T>, () => any>>(
+	init: T,
+	extension?: C,
+): Prettify<T & C> {
+	if (init === null || typeof init !== 'object') {
+		throw new Error('init must be a non-null object');
+	}
+
+	const proxy = makeProxy(init);
+	if (!extension) {
+		return proxy as T & C;
+	}
+
+	for (const [key, value] of Object.entries(extension) as [keyof C, () => any][]) {
+		(proxy as any)[key] = computed(value.bind(proxy));
+	}
+
+	return proxy as T & C;
+}
+
+const ryan = new Person();
+
+let snap = getProxySnapshot(ryan);
+console.log(snap.greetings());
+console.log(snap.greetings());
+snap.incVersion();
+snap = getProxySnapshot(ryan);
+console.log(snap.greetings());
+
+// const people = makeStore(
+// 	{ version: 1, info: { name: 'Alice', age: 30 } },
+// 	{
+// 		getGreeting: () => `Hello, I'm ${people.info.name} and I'm ${people.info.age} years old.`,
+// 		getVersion: () => `Version ${people.version}`,
+// 		getVersionGreeting: () => [people.getVersion(), people.getGreeting()].join(' - '),
+// 	},
+// );
+
+// console.log(people.getVersionGreeting());
+// console.log(people.getVersionGreeting());
+// console.log(people.getVersion());
+// console.log(people.getGreeting());
+
+// people.version = 2;
+// console.log(people.getVersionGreeting());
+// console.log(people.getVersion());
+// console.log(people.getGreeting());
